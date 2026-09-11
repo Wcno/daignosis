@@ -146,13 +146,6 @@ dAIgnosis es un **sensor on-prem con IA en el dispositivo** que se conecta a los
 - **Muestra impacto** en negocio: QoE 0–100 con desviación respecto al propio historial del sitio, consultas afectadas × segundos, SLA.
 - **Prueba el aislamiento**: un guard de sockets bloquea cualquier salida que no sea loopback (o el broker Kafka configurado como ingesta) y mide `egress_bytes`.
 
-### Lo que no hace (y por qué es negocio)
-
-- **No llama APIs de inferencia en la nube** — esa es la soberanía vendible.
-- **No gestiona clústeres Kafka ni Wazuh manager** — consume del broker existente y emite JSON de alerta a un webhook local. Encaja en cualquier operación sin cambiar el data plane.
-- **No entrena modelos** — nivel 1 heurístico en stdlib; adopción barata y predecible.
-- **No bloquea DNS** — no arriesga falsos positivos sobre el tráfico del cliente; primero demuestra y explica, luego mitiga (roadmap).
-
 ## Cómo funciona (alto nivel)
 
 ```
@@ -182,27 +175,11 @@ QVAC **no** ve cada query; recibe evidencia ya calculada y decisiones difíciles
 | Dominio de campaña `xjs83kavqpwm.xyz` | Inyectado en demo | Escenario de DGA + beacon |
 | QVAC SDK / `QWEN3_600M_INST_Q4` | Tether/QVAC | Única inferencia. Local: explicación y correlación de campañas |
 
-## Límites honestos (y el plan para cerrarlos)
-
-- La detección es **heurística, nivel 1**: sólida para el caso de uso y el demo, no es una claim de producción. En roadmap: validación de precisión/recall contra un dataset etiquetado conocido.
-- El overlay de latencia/RCODE es sintético (los logs BIND no lo traen); con Kafka puede llegar real en el mensaje.
-- La integración Wazuh genera JSON y reglas compatibles y, con `--wazuh-webhook`, lo entrega a un relay/API local; el dashboard confirma el contrato aunque el manager no esté instalado.
-
 ## Pruebas
 
 ```bash
 python -m unittest discover -s tests -v
 ```
-
-## Roadmap comercial
-
-- **Consumo nativo de resolvers** (BIND CRM/Unbound) además de logs; fuente Kafka ya operativa.
-- **Validación y métricas**: precisión/recall de cada detector sobre un dataset etiquetado (argumento de producción).
-- **Modo monitorizado → mitigación**: cuarentena con whitelist por sitio, desbloqueable.
-- **Mapeo MITRE ATT&CK** y playbooks por técnica/activo en las alertas correlacionadas.
-- **Baselines por sitio** totalmente autoaprendidos (sin overlay manual).
-- **Plan premium** "correlación + SLA" diferenciado por tarifa.
-- **Reportes de cumplimiento** automatizados (RGPD, NIST, PCI) apoyados en la prueba de cero egreso.
 
 ## Licencia
 
