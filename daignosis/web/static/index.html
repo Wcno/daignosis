@@ -9,9 +9,16 @@
 <body>
   <header class="lockhead">
     <div class="gate" id="gate" data-sealed="true" aria-hidden="true"></div>
-    <div class="lockhead-copy">
-      <h1>dAIgnosis</h1>
-      <p>La telemetría DNS queda en la esclusa. Inferencia QVAC en este equipo. Nada sale al mar.</p>
+    <div class="topline">
+      <div class="lockhead-copy">
+        <p class="product-mark">OVNICOM / SENTINEL-DNS</p>
+        <h1>dAIgnosis</h1>
+        <p>Inteligencia DNS soberana para SOC y NOC. Detecta campañas, explica el impacto y no abandona el datacenter.</p>
+      </div>
+      <div class="live-status" id="live-status">
+        <span class="status-dot"></span>
+        <span>agente local activo</span>
+      </div>
     </div>
     <dl class="seal" id="seal">
       <div>
@@ -30,25 +37,46 @@
         <dt>Consultas vistas</dt>
         <dd id="seen">0</dd>
       </div>
+      <div>
+        <dt>Correlación QVAC</dt>
+        <dd id="qvac-state">cargando</dd>
+      </div>
     </dl>
   </header>
 
   <main>
     <section class="chambers" aria-label="Calidad por sitio">
-      <h2>Cámaras del canal</h2>
-      <p class="lede">Cada cámara es un sitio. El nivel de agua es el QoE. Si baja, el operador ve la causa, no un número suelto.</p>
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">EXPERIENCIA</p>
+          <h2>Salud por sitio</h2>
+        </div>
+        <p class="lede">QoE 0–100 contra el baseline propio de cada sitio. La causa raíz aparece antes que el ticket.</p>
+      </div>
       <div id="chambers" class="chamber-row"></div>
     </section>
 
     <div class="split">
       <section class="flow" aria-label="Tráfico DNS">
-        <h2>Flujo en la esclusa</h2>
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">INGESTA</p>
+            <h2>Flujo en la esclusa</h2>
+          </div>
+          <span class="live-pill">STREAM</span>
+        </div>
         <p class="meta" id="flow-meta">esperando stream</p>
         <ol id="flow"></ol>
       </section>
 
       <section class="incident" aria-label="Incidente de seguridad">
-        <h2>Puerta de amenaza</h2>
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">SEGURIDAD</p>
+            <h2>Incidente prioritario</h2>
+          </div>
+          <span class="live-pill danger">WAZUH</span>
+        </div>
         <div id="incident-empty" class="empty">Todavía no hay incidente por encima del umbral. El filtro heurístico sigue leyendo el stream.</div>
         <article id="incident" hidden>
           <p class="risk"><span id="risk">0</span><small>/100</small></p>
@@ -62,8 +90,27 @@
       </section>
     </div>
 
+    <section class="campaigns" aria-label="Campañas correlacionadas">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">QVAC / CORRELACIÓN</p>
+          <h2>De eventos aislados a una campaña</h2>
+        </div>
+        <p class="lede">La ventana local de 120 s agrupa dominio, cadencia, sitio y hosts antes de pedir un veredicto al modelo.</p>
+      </div>
+      <div id="campaign-list" class="campaign-list">
+        <div class="empty">Esperando evidencia suficiente para formar una campaña.</div>
+      </div>
+    </section>
+
     <section class="siem-log" aria-label="Alertas formato Wazuh">
-      <h2>Lo que recibiría Wazuh</h2>
+      <div class="section-heading compact">
+        <div>
+          <p class="section-kicker">CONTRATO SIEM</p>
+          <h2>Última alerta para Wazuh</h2>
+        </div>
+        <span class="live-pill" id="wazuh-state">LOCAL JSON</span>
+      </div>
       <p class="lede">JSON de alerta local, mismo esquema que <code>alerts.json</code>. El manager no tiene que estar instalado para demostrar el contrato.</p>
       <pre id="wazuh"></pre>
     </section>

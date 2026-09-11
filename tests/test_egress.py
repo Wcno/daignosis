@@ -1,8 +1,10 @@
 import socket
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from daignosis.egress import GUARD
-from daignosis.wazuh import format_alert
+from daignosis.wazuh import WazuhWebhook, format_alert
 from daignosis.models import Incident
 
 
@@ -34,6 +36,33 @@ class EgressTests(unittest.TestCase):
         self.assertGreaterEqual(alert["rule"]["level"], 12)
         self.assertIn("daignosis", alert["rule"]["groups"])
         self.assertEqual(alert["data"]["dns.question.name"], "xjs83kavqpwm.xyz")
+
+    def test_wazuh_webhook_delivers_local_alert(self):
+        received = []
+
+        class Receiver(BaseHTTPRequestHandler):
+            def do_POST(self):
+                received.append(self.rfile.read(int(self.headers["Content-Length"])))
+                self.send_response(202)
+                self.end_headers()
+
+            def log_message(self, fmt, *args):
+                return
+
+        server = HTTPServer(("127.0.0.1", 0), Receiver)
+        thread = threading.Thread(target=server.handle_request)
+        thread.start()
+        try:
+            hook = WazuhWebhook(f"http://127.0.0.1:{server.server_port}/alerts")
+            self.assertTrue(hook.send({"rule": {"id": "100001"}}))
+            thread.join(timeout=1)
+            self.assertEqual(received, [b'{"rule": {"id": "100001"}}'])
+        finally:
+            server.server_close()
+
+    def test_wazuh_webhook_rejects_public_endpoint(self):
+        with self.assertRaises(PermissionError):
+            WazuhWebhook("https://example.com/wazuh")
 
 
 if __name__ == "__main__":

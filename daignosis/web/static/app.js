@@ -37,7 +37,9 @@ function render(s) {
   const sealed = (s.sovereignty.external_data_transmitted_bytes || 0) === 0 && (s.sovereignty.cloud_ai_calls || 0) === 0;
   gate.dataset.sealed = sealed ? "true" : "false";
   document.getElementById("seal-state").textContent = sealed ? "cerrada" : "abierta — fugas";
-  flowMeta.textContent = `${s.qps} q/s · origen ${s.source} · QVAC ${s.qvac.ready ? "listo" : (s.qvac.error || "cargando o plantilla")}`;
+  const qvacLabel = s.qvac.ready ? "modelo local listo" : (s.qvac.error || "plantilla local");
+  document.getElementById("qvac-state").textContent = s.qvac.ready ? "LOCAL" : "LOCAL / FALLBACK";
+  flowMeta.textContent = `${s.qps} q/s · origen ${s.source} · ${qvacLabel}`;
 
   chambersEl.replaceChildren();
   const sites = (s.qoe || []).slice().sort((a, b) => a.site.localeCompare(b.site));
@@ -84,6 +86,35 @@ function render(s) {
 
   const alert = (s.alerts || [])[0];
   wazuhEl.textContent = alert ? JSON.stringify(alert, null, 2) : "sin alertas todavía";
+  document.getElementById("wazuh-state").textContent = alert
+    ? (alert.data && alert.data.qvac_used ? "QVAC + WAZUH" : "WAZUH JSON")
+    : "LOCAL JSON";
+
+  const campaignList = document.getElementById("campaign-list");
+  campaignList.replaceChildren();
+  const campaigns = s.cases || [];
+  if (!campaigns.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Esperando evidencia suficiente para formar una campaña.";
+    campaignList.appendChild(empty);
+  } else {
+    campaigns.slice(0, 3).forEach((campaign) => {
+      const article = document.createElement("article");
+      article.className = "campaign";
+      article.innerHTML = `
+        <div class="campaign-top">
+          <span class="campaign-risk">${campaign.risk_score}/100</span>
+          <span class="campaign-severity">${campaign.severity}</span>
+        </div>
+        <strong>${campaign.domain}</strong>
+        <p>${campaign.site} · ${campaign.hosts} hosts · ${campaign.events} eventos</p>
+        <blockquote>${campaign.explanation}</blockquote>
+        <small>${campaign.qvac_used ? "Veredicto QVAC local" : "Veredicto de seguridad local"} · ${campaign.recommended_action}</small>
+      `;
+      campaignList.appendChild(article);
+    });
+  }
 }
 
 async function tick() {

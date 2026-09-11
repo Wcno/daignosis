@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from daignosis.models import Incident
+from daignosis.egress import ALLOWED
 
 
 def format_alert(inc: Incident) -> dict:
@@ -52,3 +55,43 @@ def format_alert(inc: Incident) -> dict:
             ensure_ascii=False,
         ),
     }
+
+
+class WazuhWebhook:
+    """Deliver the Wazuh-compatible alert to a local manager or relay."""
+
+    def __init__(self, endpoint: str | None, timeout: float = 0.8) -> None:
+        self.endpoint = endpoint.rstrip("/") if endpoint else None
+        self.timeout = timeout
+        self.last_error: str | None = None
+        if self.endpoint:
+            from urllib.parse import urlparse
+
+            host = urlparse(self.endpoint).hostname or ""
+            if host not in ALLOWED:
+                raise PermissionError(f"Wazuh endpoint must be local: {host}")
+
+    @property
+    def configured(self) -> bool:
+        return self.endpoint is not None
+
+    def send(self, alert: dict) -> bool:
+        if not self.endpoint:
+            return False
+        try:
+            body = json.dumps(alert, ensure_ascii=False).encode("utf-8")
+            req = Request(
+                self.endpoint,
+                data=body,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with urlopen(req, timeout=self.timeout) as response:
+                if not 200 <= response.status < 300:
+                    self.last_error = f"HTTP {response.status}"
+                    return False
+            self.last_error = None
+            return True
+        except (URLError, TimeoutError, OSError, PermissionError) as exc:
+            self.last_error = str(exc)
+            return False

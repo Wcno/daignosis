@@ -15,7 +15,7 @@ from daignosis.qoe import QoeEngine
 from daignosis.qvac_explain import Explainer, qoe_template, template_explain
 from daignosis.risk import _severity, aggregate
 from daignosis.state import AppState
-from daignosis.wazuh import format_alert
+from daignosis.wazuh import WazuhWebhook, format_alert
 
 SITE_CAPACITY = {
     "Panama-East": 400.0,
@@ -34,11 +34,13 @@ class Pipeline:
         explainer: Explainer,
         sink: MetricSink,
         batch_size: int = 512,
+        wazuh_endpoint: str | None = None,
     ) -> None:
         self.state = state
         self.explainer = explainer
         self.sink = sink
         self.batch_size = batch_size
+        self.wazuh = WazuhWebhook(wazuh_endpoint)
         self.overlay = Overlay()
         self.detectors = DetectorBank()
         self.qoe = QoeEngine()
@@ -57,7 +59,9 @@ class Pipeline:
             inc.explanation = expl
             inc.recommended_action = rec
         alert = format_alert(inc)
-        inc.wazuh_sent = True
+        delivered = self.wazuh.send(alert)
+        # With no endpoint, the contract is still emitted to the local console.
+        inc.wazuh_sent = delivered or not self.wazuh.configured
         self.state.add_incident(inc, alert)
         self.sink.write_incident(
             {

@@ -4,11 +4,14 @@ import argparse
 import os
 import sys
 import threading
+import webbrowser
+from collections.abc import Iterator
 from pathlib import Path
 
 from daignosis.clickhouse import MetricSink
 from daignosis.egress import GUARD
 from daignosis.kafka_source import iter_kafka
+from daignosis.models import DnsEvent
 from daignosis.pipeline import Pipeline, open_source
 from daignosis.qvac_explain import Explainer
 from daignosis.server import serve
@@ -32,8 +35,40 @@ def _default_data() -> Path | None:
     return candidate if candidate.is_dir() else None
 
 
-def cmd_demo(args: argparse.Namespace) -> int:
+def _probe_airgap() -> None:
+    import socket
+
+    try:
+        socket.create_connection(("1.1.1.1", 443), timeout=1)
+        print("FAIL: connection to 1.1.1.1 was allowed", file=sys.stderr)
+    except PermissionError as exc:
+        print(f"PASS: {exc}")
+    except OSError as exc:
+        print(f"PASS (blocked by stack): {exc}")
+
+
+def _build_source(args: argparse.Namespace, state: AppState) -> Iterator[DnsEvent]:
+    if args.kafka:
+        topics = args.topic or ["dns-queries"]
+        for hostport in args.kafka.split(","):
+            GUARD.allow(hostport.split(":")[0].strip())
+        state.source = f"kafka:{args.kafka}#{','.join(topics)}"
+        return iter_kafka(args.kafka, topics, group=args.group)
     data = Path(args.data) if args.data else _default_data()
+    state.source = str(data) if data and data.exists() else "synthetic-benign+inject"
+    return open_source(data if data and data.exists() else None, args.file)
+
+
+def _sdk_available() -> bool:
+    try:
+        import tetherto  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _bootstrap(args: argparse.Namespace) -> tuple[AppState, Pipeline, Iterator[DnsEvent]]:
     cache = Path(args.cache)
     cache.mkdir(parents=True, exist_ok=True)
     var = Path(args.var)
@@ -41,22 +76,81 @@ def cmd_demo(args: argparse.Namespace) -> int:
     if not args.no_airgap:
         GUARD.install()
     state = AppState()
-    if args.kafka:
-        topics = args.topic or ["dns-queries"]
-        for hostport in args.kafka.split(","):
-            GUARD.allow(hostport.split(":")[0].strip())
-        state.source = f"kafka:{args.kafka}#{','.join(topics)}"
-        source = iter_kafka(args.kafka, topics, group=args.group)
-    else:
-        state.source = str(data) if data and data.exists() else "synthetic-benign+inject"
-        source = open_source(data if data and data.exists() else None, args.file)
+    source = _build_source(args, state)
     explainer = Explainer(cache_dir=cache, enabled=not args.no_qvac)
     sink = MetricSink(url=args.clickhouse, var_dir=var)
-    pipe = Pipeline(state=state, explainer=explainer, sink=sink, batch_size=args.batch)
+    pipe = Pipeline(
+        state=state,
+        explainer=explainer,
+        sink=sink,
+        batch_size=args.batch,
+        wazuh_endpoint=args.wazuh_webhook,
+    )
+    return state, pipe, source
+
+
+def cmd_demo(args: argparse.Namespace) -> int:
+    state, pipe, source = _bootstrap(args)
     httpd = serve(state, args.host, args.port)
     t_http = threading.Thread(target=httpd.serve_forever, name="http", daemon=True)
     t_http.start()
     print(f"dAIgnosis http://{args.host}:{args.port}  source={state.source}", flush=True)
+    try:
+        pipe.run(source)
+    finally:
+        pipe.stop = True
+        httpd.shutdown()
+        GUARD.restore()
+    return 0
+
+
+def cmd_smoke(args: argparse.Namespace) -> int:
+    cache = Path(args.cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    var = Path(args.var)
+    var.mkdir(parents=True, exist_ok=True)
+    if not args.no_airgap:
+        GUARD.install()
+    print("== dAIgnosis smoke ==", flush=True)
+    _probe_airgap()
+
+    qvac = not args.no_qvac and _sdk_available()
+    if qvac:
+        print("QVAC SDK detectado; precargando modelo local...", flush=True)
+        if cmd_prefetch(argparse.Namespace(cache=str(cache))) != 0:
+            print("WARN: modelo QVAC no quedo listo. El demo usara explicaciones de plantilla.", file=sys.stderr)
+            qvac = False
+    elif not args.no_qvac:
+        print(
+            "WARN: SDK QVAC no instalado. Demo con explicaciones de plantilla.\n"
+            "      Para IA real: pip install -r requirements-qvac.txt && "
+            "python -m tetherto.qvac_sdk install-worker",
+            file=sys.stderr,
+        )
+
+    state = AppState()
+    source = _build_source(args, state)
+    explainer = Explainer(cache_dir=cache, enabled=qvac)
+    sink = MetricSink(url=args.clickhouse, var_dir=var)
+    pipe = Pipeline(
+        state=state,
+        explainer=explainer,
+        sink=sink,
+        batch_size=args.batch,
+        wazuh_endpoint=args.wazuh_webhook,
+    )
+
+    httpd = serve(state, args.host, args.port)
+    t_http = threading.Thread(target=httpd.serve_forever, name="http", daemon=True)
+    t_http.start()
+    url = f"http://{args.host}:{args.port}"
+    print(f"dAIgnosis {url}  source={state.source}", flush=True)
+    if not args.no_open:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+    print("Consola abierta en el navegador. Pulsa Ctrl+C para salir.", flush=True)
     try:
         pipe.run(source)
     finally:
@@ -101,19 +195,31 @@ def cmd_prefetch(args: argparse.Namespace) -> int:
 def cmd_airgap(args: argparse.Namespace) -> int:
     GUARD.install()
     try:
-        import socket
-
-        socket.create_connection(("1.1.1.1", 443), timeout=1)
-        print("FAIL: connection to 1.1.1.1 was allowed", file=sys.stderr)
-        return 1
-    except PermissionError as exc:
-        print(f"PASS: {exc}")
-        return 0
-    except OSError as exc:
-        print(f"PASS (blocked by stack): {exc}")
-        return 0
+        _probe_airgap()
     finally:
         GUARD.restore()
+    return 0
+
+
+def _add_run_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--data", default=None)
+    p.add_argument("--file", default="queries.0")
+    p.add_argument("--kafka", default=None, help="bootstrap servers, e.g. 10.0.0.5:9092,10.0.0.6:9092")
+    p.add_argument("--topic", action="append", default=None, help="topic(s) to consume (repeatable)")
+    p.add_argument("--group", default="daignosis", help="consumer group id")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--batch", type=int, default=512)
+    p.add_argument("--cache", default=".qvac-cache")
+    p.add_argument("--var", default="var")
+    p.add_argument("--clickhouse", default="http://127.0.0.1:8123")
+    p.add_argument(
+        "--wazuh-webhook",
+        default=None,
+        help="local Wazuh relay/API endpoint receiving JSON alerts",
+    )
+    p.add_argument("--no-qvac", action="store_true")
+    p.add_argument("--no-airgap", action="store_true")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -121,20 +227,13 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("demo")
-    d.add_argument("--data", default=None)
-    d.add_argument("--file", default="queries.0")
-    d.add_argument("--kafka", default=None, help="bootstrap servers, e.g. 10.0.0.5:9092,10.0.0.6:9092")
-    d.add_argument("--topic", action="append", default=None, help="topic(s) to consume (repeatable)")
-    d.add_argument("--group", default="daignosis", help="consumer group id")
-    d.add_argument("--host", default="127.0.0.1")
-    d.add_argument("--port", type=int, default=8080)
-    d.add_argument("--batch", type=int, default=512)
-    d.add_argument("--cache", default=".qvac-cache")
-    d.add_argument("--var", default="var")
-    d.add_argument("--clickhouse", default="http://127.0.0.1:8123")
-    d.add_argument("--no-qvac", action="store_true")
-    d.add_argument("--no-airgap", action="store_true")
+    _add_run_args(d)
     d.set_defaults(func=cmd_demo)
+
+    s = sub.add_parser("smoke", help="air-gap + modelo QVAC + demo + abrir navegador, de un tiron")
+    _add_run_args(s)
+    s.add_argument("--no-open", action="store_true")
+    s.set_defaults(func=cmd_smoke)
 
     pf = sub.add_parser("prefetch")
     pf.add_argument("--cache", default=".qvac-cache")

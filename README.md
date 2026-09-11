@@ -87,6 +87,22 @@ QVAC **no** ve cada query; recibe evidencia ya calculada y decisiones difíciles
 
 ## Pruébalo en 5 minutos
 
+**Con un solo comando** (verifica el air-gap, precarga el modelo QVAC si el SDK está instalado, lanza el demo con tu dataset y abre la consola en el navegador):
+
+```bash
+python -m daignosis smoke
+```
+
+[Consola: `http://127.0.0.1:8080`](http://127.0.0.1:8080) — sale con `Ctrl+C`.
+
+Sin SDK QVAC todavía, o sin abrir el navegador automáticamente:
+
+```bash
+python -m daignosis smoke --no-qvac --no-open
+```
+
+### Paso a paso
+
 ```bash
 cd daignosis
 python -m daignosis prove-airgap          # prueba de soberanía: PASS
@@ -109,6 +125,15 @@ python -m daignosis demo --kafka 10.0.0.5:9092,10.0.0.6:9092 --topic dns-queries
 ```
 
 El guard anti-egreso autoriza **solo** los brokers indicados como fuente de ingesta; todo lo demás sigue bloqueado y analizado.
+
+Para entregar la misma alerta a un relay/API local de Wazuh, añade su endpoint loopback:
+
+```bash
+python -m daignosis demo --kafka 127.0.0.1:9092 \
+  --wazuh-webhook http://127.0.0.1:55000/daignosis
+```
+
+El agente solo acepta endpoints Wazuh locales (`127.0.0.1`, `localhost` o `::1`); una URL pública se rechaza antes de iniciar. Sin `--wazuh-webhook`, la consola conserva el JSON compatible como contrato demostrable sin fingir una entrega al manager.
 
 ### Camino completo con la IA local (correlación QVAC real)
 
@@ -149,7 +174,7 @@ python -m daignosis demo        # explicación + veredicto de campaña en el dis
 
 - La detección es **heurística, nivel 1**: sólida para el caso de uso y el demo, no es una claim de producción. En roadmap: validación de precisión/recall contra un dataset etiquetado conocido.
 - El overlay de latencia/RCODE es sintético (los logs BIND no lo traen); con Kafka puede llegar real en el mensaje.
-- La integración Wazuh genera JSON y reglas compatibles y las muestra en consola; el demo del manager completo de Wazuh queda como paso de operación.
+- La integración Wazuh genera JSON y reglas compatibles y, con `--wazuh-webhook`, lo entrega a un relay/API local; el dashboard confirma el contrato aunque el manager no esté instalado.
 
 ## Pruebas
 
