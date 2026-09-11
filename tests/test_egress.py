@@ -1,9 +1,9 @@
 import socket
 import unittest
 
-from sentinel_dns.egress import GUARD
-from sentinel_dns.wazuh import format_alert
-from sentinel_dns.models import Incident
+from daignosis.egress import GUARD
+from daignosis.wazuh import format_alert
+from daignosis.models import Incident
 
 
 class EgressTests(unittest.TestCase):
@@ -30,9 +30,9 @@ class EgressTests(unittest.TestCase):
             recommended_action="Investigate",
         )
         alert = format_alert(inc)
-        self.assertEqual(alert["decoder"]["name"], "sentinel-dns")
+        self.assertEqual(alert["decoder"]["name"], "daignosis")
         self.assertGreaterEqual(alert["rule"]["level"], 12)
-        self.assertIn("sentinel-dns", alert["rule"]["groups"])
+        self.assertIn("daignosis", alert["rule"]["groups"])
         self.assertEqual(alert["data"]["dns.question.name"], "xjs83kavqpwm.xyz")
 
 

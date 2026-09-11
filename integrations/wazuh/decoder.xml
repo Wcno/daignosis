@@ -1,3 +1,3 @@
-<decoder name="sentinel-dns">
-  <prematch>^{"source":"sentinel-dns"</prematch>
+<decoder name="daignosis">
+  <prematch>^{"source":"daignosis"</prematch>
 </decoder>

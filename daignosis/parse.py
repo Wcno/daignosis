@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from sentinel_dns.models import DnsEvent
+from daignosis.models import DnsEvent
 
 LINE_RE = re.compile(
     r"^(?P<ts>\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}\.\d+)\s+"

@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from sentinel_dns.parse import parse_line
+from daignosis.parse import parse_line
 
 SAMPLE = Path(__file__).resolve().parent / "fixtures" / "queries.sample"
 

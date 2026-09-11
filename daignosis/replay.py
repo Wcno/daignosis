@@ -4,8 +4,8 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-from sentinel_dns.models import DnsEvent
-from sentinel_dns.parse import parse_line
+from daignosis.models import DnsEvent
+from daignosis.parse import parse_line
 
 BENIGN = [
     "www.apple.com",

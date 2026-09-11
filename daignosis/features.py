@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 
-from sentinel_dns.models import DnsEvent
+from daignosis.models import DnsEvent
 
 VOWELS = set("aeiou")
 

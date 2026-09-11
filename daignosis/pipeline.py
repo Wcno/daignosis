@@ -4,17 +4,18 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-from sentinel_dns.clickhouse import MetricSink
-from sentinel_dns.detect import DetectorBank
-from sentinel_dns.features import extract
-from sentinel_dns.inject import Scenario
-from sentinel_dns.models import DnsEvent, Incident
-from sentinel_dns.overlay import Overlay, lookup_site
-from sentinel_dns.qoe import QoeEngine
-from sentinel_dns.qvac_explain import Explainer, qoe_template, template_explain
-from sentinel_dns.risk import aggregate
-from sentinel_dns.state import AppState
-from sentinel_dns.wazuh import format_alert
+from daignosis.clickhouse import MetricSink
+from daignosis.correlate import Campaign, Correlator
+from daignosis.detect import DetectorBank
+from daignosis.features import extract
+from daignosis.inject import Scenario
+from daignosis.models import DnsEvent, Incident
+from daignosis.overlay import Overlay, lookup_site
+from daignosis.qoe import QoeEngine
+from daignosis.qvac_explain import Explainer, qoe_template, template_explain
+from daignosis.risk import _severity, aggregate
+from daignosis.state import AppState
+from daignosis.wazuh import format_alert
 
 SITE_CAPACITY = {
     "Panama-East": 400.0,
@@ -42,6 +43,7 @@ class Pipeline:
         self.detectors = DetectorBank()
         self.qoe = QoeEngine()
         self.scenario = Scenario()
+        self.correlator = Correlator()
         self._cooldown: dict[tuple[str, str], float] = {}
         self._last_qoe_explain: dict[str, str] = {}
         self.stop = False
@@ -77,6 +79,55 @@ class Pipeline:
         self.state.set_qoe(snap)
         self.sink.write_qoe(snap)
 
+    def _on_case_explained(
+        self,
+        campaign: Campaign,
+        explanation: str,
+        recommended_action: str,
+        qvac_used: bool,
+    ) -> None:
+        score = 55.0 + min(30.0, campaign.n_hosts * 6.0) + min(20.0, campaign.n_events * 3.0)
+        if campaign.repeated_seconds:
+            score += 15.0
+        if campaign.concluded:
+            score += 10.0
+        risk = int(min(100, round(score)))
+        signals = [
+            f"{campaign.n_hosts} internal hosts on the same domain/site",
+            f"{campaign.n_events} corroborating events in one window",
+        ]
+        if campaign.repeated_seconds:
+            signals.append(f"steady ~{campaign.repeated_seconds:.0f}s cadence")
+        inc = Incident(
+            ts=campaign.ts,
+            domain=campaign.domain,
+            kind="coordinated_campaign",
+            risk_score=risk,
+            severity=_severity(risk),
+            signals=signals,
+            affected_hosts=campaign.hosts,
+            customer=campaign.customer,
+            site=campaign.site,
+            explanation=explanation,
+            recommended_action=recommended_action,
+            qvac_used=qvac_used,
+        )
+        self._emit_incident(inc)
+        self.state.add_case(
+            {
+                "ts": inc.ts,
+                "domain": inc.domain,
+                "site": inc.site,
+                "hosts": campaign.n_hosts,
+                "events": campaign.n_events,
+                "risk_score": inc.risk_score,
+                "severity": inc.severity,
+                "explanation": inc.explanation,
+                "recommended_action": inc.recommended_action,
+                "qvac_used": inc.qvac_used,
+            }
+        )
+
     def process_event(self, ev: DnsEvent) -> Incident | None:
         self.overlay.enrich(ev)
         feats = extract(ev)
@@ -111,7 +162,7 @@ class Pipeline:
                 self._last_qoe_explain[snap["site"]] = "ok"
 
     def run(self, source: Iterator[DnsEvent]) -> None:
-        self.explainer.start(self._on_explained, self._on_qoe_explained)
+        self.explainer.start(self._on_explained, self._on_qoe_explained, self._on_case_explained)
         batch: list[DnsEvent] = []
         last_sleep_check = time.monotonic()
         try:
@@ -183,13 +234,17 @@ class Pipeline:
             inc.explanation = expl
             inc.recommended_action = rec
             self.explainer.submit_incident(inc)
+        for inc in pending:
+            self.correlator.add(inc)
+        for campaign in self.correlator.poll(time.time()):
+            self.explainer.submit_case(campaign)
         self._flush_qoe()
         self.state.qvac_ready = self.explainer.ready
         self.state.qvac_error = self.explainer.error
 
 
 def open_source(data: Path | None, preferred: str | None) -> Iterator[DnsEvent]:
-    from sentinel_dns.replay import iter_bind_dir, iter_synthetic
+    from daignosis.replay import iter_bind_dir, iter_synthetic
 
     if data and data.exists():
         return iter_bind_dir(data, preferred)

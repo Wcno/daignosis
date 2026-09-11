@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from sentinel_dns.egress import ALLOWED
+from daignosis.egress import ALLOWED
 
 
 class MetricSink:

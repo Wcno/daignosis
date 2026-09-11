@@ -1,10 +1,10 @@
 import unittest
 
-from sentinel_dns.detect import DetectorBank, dga_score, typosquat
-from sentinel_dns.features import extract
-from sentinel_dns.models import DnsEvent
-from sentinel_dns.overlay import Overlay
-from sentinel_dns.risk import aggregate
+from daignosis.detect import DetectorBank, dga_score, typosquat
+from daignosis.features import extract
+from daignosis.models import DnsEvent
+from daignosis.overlay import Overlay
+from daignosis.risk import aggregate
 
 
 def ev(qname: str, ip: str = "190.14.213.60", ts: float = 1000.0) -> DnsEvent:

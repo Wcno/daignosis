@@ -1,6 +1,6 @@
 import unittest
 
-from sentinel_dns.qoe import QoeEngine
+from daignosis.qoe import QoeEngine
 
 
 class QoeTests(unittest.TestCase):

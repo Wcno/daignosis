@@ -65,6 +65,16 @@ def _component_rate(p: float, good: float, bad: float) -> float:
     return _clamp(100.0 * (bad - p) / (bad - good))
 
 
+def _component_z(z: float, good: float = 1.0, bad: float = 3.0) -> float:
+    if z != z:  # NaN
+        return 100.0
+    if z <= good:
+        return 100.0
+    if z >= bad:
+        return 0.0
+    return _clamp(100.0 * (bad - z) / (bad - good))
+
+
 class QoeEngine:
     def __init__(self, flush_every: float = 5.0) -> None:
         self.flush_every = flush_every
@@ -107,10 +117,15 @@ class QoeEngine:
             row.nxr.update(nx_rate)
             row.tor.update(to_rate)
             row.qps_ewma.update(qps)
-            lat_s = _component_latency(avg_lat)
-            nx_s = _component_rate(nx_rate, 0.04, 0.20)
-            to_s = _component_rate(to_rate, 0.01, 0.08)
-            sat_s = _clamp(100.0 * (1.0 - max(0.0, sat - 0.7) / 0.3))
+            lat_z = row.lat.z(avg_lat)
+            nx_z = row.nxr.z(nx_rate)
+            to_z = row.tor.z(to_rate)
+            sat_z = row.qps_ewma.z(qps)
+            lat_s = min(_component_latency(avg_lat), _component_z(lat_z))
+            nx_s = min(_component_rate(nx_rate, 0.04, 0.20), _component_z(nx_z))
+            to_s = min(_component_rate(to_rate, 0.01, 0.08), _component_z(to_z))
+            sat_fixed = _clamp(100.0 * (1.0 - max(0.0, sat - 0.7) / 0.3))
+            sat_s = min(sat_fixed, _component_z(sat_z))
             qoe = 0.40 * lat_s + 0.25 * nx_s + 0.20 * to_s + 0.15 * sat_s
             if qoe >= 80:
                 status = "ok"
@@ -119,10 +134,10 @@ class QoeEngine:
             else:
                 status = "critical"
             parts = {
-                "latency": (lat_s, row.lat.z(avg_lat), avg_lat, row.lat.mean),
-                "nxdomain": (nx_s, row.nxr.z(nx_rate), nx_rate, row.nxr.mean),
-                "timeout": (to_s, row.tor.z(to_rate), to_rate, row.tor.mean),
-                "saturation": (sat_s, 0.0, sat, row.qps_ewma.mean),
+                "latency": (lat_s, lat_z, avg_lat, row.lat.mean),
+                "nxdomain": (nx_s, nx_z, nx_rate, row.nxr.mean),
+                "timeout": (to_s, to_z, to_rate, row.tor.mean),
+                "saturation": (sat_s, sat_z, sat, row.qps_ewma.mean),
             }
             cause = min(parts.items(), key=lambda kv: kv[1][0])[0]
             if status in {"degraded", "critical"}:
@@ -145,7 +160,10 @@ class QoeEngine:
                 "qoe_score": round(qoe, 1),
                 "qoe_status": status,
                 "root_cause": cause,
-                "latency_z": round(parts["latency"][1], 2),
+                "latency_z": round(lat_z, 2),
+                "nxdomain_z": round(nx_z, 2),
+                "timeout_z": round(to_z, 2),
+                "saturation_z": round(sat_z, 2),
                 "baseline_latency": round(row.lat.mean or avg_lat, 2),
                 "affected_queries": row.affected_queries,
                 "degraded_seconds": round(duration, 1),

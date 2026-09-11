@@ -5,8 +5,8 @@ import json
 import random
 from pathlib import Path
 
-from sentinel_dns.etld import etld1
-from sentinel_dns.models import DnsEvent
+from daignosis.etld import etld1
+from daignosis.models import DnsEvent
 
 _CFG = Path(__file__).resolve().parent / "config" / "sites.json"
 

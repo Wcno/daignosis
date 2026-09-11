@@ -1,4 +1,4 @@
-from sentinel_dns.cli import main
+from daignosis.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

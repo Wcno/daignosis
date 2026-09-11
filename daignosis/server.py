@@ -5,7 +5,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from sentinel_dns.state import AppState
+from daignosis.state import AppState
 
 STATIC = Path(__file__).resolve().parent / "web" / "static"
 MIME = {

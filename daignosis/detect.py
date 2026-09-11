@@ -4,7 +4,7 @@ import json
 from collections import OrderedDict, deque
 from pathlib import Path
 
-from sentinel_dns.models import DnsEvent, Finding
+from daignosis.models import DnsEvent, Finding
 
 _BRANDS = json.loads(
     (Path(__file__).resolve().parent / "config" / "brands.json").read_text(encoding="utf-8")

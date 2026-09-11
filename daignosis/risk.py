@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sentinel_dns.models import Finding, Incident
+from daignosis.models import Finding, Incident
 
 
 def _severity(score: int) -> str:

@@ -1,15 +1,16 @@
 [project]
-name = "sentinel-dns"
-version = "0.1.0"
-description = "Local DNS intelligence agent for Ovnicom / QVAC Track 04"
+name = "daignosis"
+version = "0.2.0"
+description = "Sovereign DNS intelligence layer: real-time telemetry to prioritized incidents, QVAC correlation and proactive network diagnosis, entirely on-prem."
 requires-python = ">=3.10"
 readme = "README.md"
 
 [project.optional-dependencies]
 qvac = ["tetherto-qvac-sdk"]
+kafka = ["confluent-kafka>=2.3,<3"]
 
 [project.scripts]
-sentinel-dns = "sentinel_dns.cli:main"
+daignosis = "daignosis.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["sentinel_dns*"]
+include = ["daignosis*"]

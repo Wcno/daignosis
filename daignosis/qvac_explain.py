@@ -6,7 +6,8 @@ import threading
 from pathlib import Path
 from queue import Empty, Queue
 
-from sentinel_dns.models import Incident
+from daignosis.correlate import Campaign, template_campaign
+from daignosis.models import Incident
 
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -64,41 +65,68 @@ class Explainer:
         self.enabled = enabled
         self.ready = False
         self.error: str | None = None
-        self._q: Queue[Incident | dict | None] = Queue(maxsize=8)
+        self._q: Queue[Incident | dict | Campaign | None] = Queue(maxsize=8)
         self._thread: threading.Thread | None = None
         self._on_incident = lambda inc: None
         self._on_qoe = lambda snap: None
+        self._on_case = lambda c, e, r, u: None
 
-    def start(self, on_incident, on_qoe) -> None:
+    def start(self, on_incident, on_qoe, on_case=None) -> None:
         self._on_incident = on_incident
         self._on_qoe = on_qoe
+        if on_case is not None:
+            self._on_case = on_case
         if not self.enabled:
             self.error = "QVAC disabled by flag"
             return
         self._thread = threading.Thread(target=self._run, name="qvac", daemon=True)
         self._thread.start()
 
+    def _resolve_sync(self, item) -> None:
+        if isinstance(item, Incident):
+            expl, rec = template_explain(item)
+            item.explanation = expl
+            item.recommended_action = rec
+            item.qvac_used = False
+            self._on_incident(item)
+        elif isinstance(item, Campaign):
+            expl, rec = template_campaign(item)
+            self._on_case(item, expl, rec, False)
+        else:
+            item["narrative"] = qoe_template(item)
+            item["qvac_used"] = False
+            self._on_qoe(item)
+
     def submit_incident(self, inc: Incident) -> None:
+        if not self.enabled or self._thread is None:
+            self._resolve_sync(inc)
+            return
         try:
             self._q.put_nowait(inc)
         except Exception:
-            expl, rec = template_explain(inc)
-            inc.explanation = expl
-            inc.recommended_action = rec
-            inc.qvac_used = False
-            self._on_incident(inc)
+            self._resolve_sync(inc)
 
     def submit_qoe(self, snap: dict) -> None:
         if snap.get("qoe_status") == "ok":
             snap["narrative"] = qoe_template(snap)
             self._on_qoe(snap)
             return
+        if not self.enabled or self._thread is None:
+            self._resolve_sync(snap)
+            return
         try:
             self._q.put_nowait(snap)
         except Exception:
-            snap["narrative"] = qoe_template(snap)
-            snap["qvac_used"] = False
-            self._on_qoe(snap)
+            self._resolve_sync(snap)
+
+    def submit_case(self, campaign: Campaign) -> None:
+        if not self.enabled or self._thread is None:
+            self._resolve_sync(campaign)
+            return
+        try:
+            self._q.put_nowait(campaign)
+        except Exception:
+            self._resolve_sync(campaign)
 
     def stop(self) -> None:
         try:
@@ -126,16 +154,7 @@ class Explainer:
                 continue
             if item is None:
                 return
-            if isinstance(item, Incident):
-                expl, rec = template_explain(item)
-                item.explanation = expl
-                item.recommended_action = rec
-                item.qvac_used = False
-                self._on_incident(item)
-            else:
-                item["narrative"] = qoe_template(item)
-                item["qvac_used"] = False
-                self._on_qoe(item)
+            self._resolve_sync(item)
 
     async def _amain(self) -> None:
         from tetherto.qvac_sdk import Client, completion, load_model, unload_model
@@ -167,6 +186,8 @@ class Explainer:
                         break
                     if isinstance(item, Incident):
                         await self._explain_incident(t, model_id, item)
+                    elif isinstance(item, Campaign):
+                        await self._explain_case(t, model_id, item)
                     else:
                         await self._explain_qoe(t, model_id, item)
             finally:
@@ -199,6 +220,32 @@ class Explainer:
             inc.recommended_action = rec
             inc.qvac_used = False
         self._on_incident(inc)
+
+    async def _explain_case(self, t, model_id, campaign: Campaign) -> None:
+        payload = campaign.brief()
+        prompt = (
+            "You are a SOC threat correlator. Decide whether the following DNS evidence from the "
+            "last 2 minutes describes ONE coordinated campaign or several isolated events. "
+            "Use the co-occurrence of repeated queries, a shared domain and a shared site across "
+            "multiple hosts. Reply JSON only: "
+            '{"is_campaign":true|false,"confidence":0.0-1.0,"summary":"string",'
+            '"recommended_action":"string"}\n'
+            + json.dumps(payload)
+        )
+        parsed = await self._complete_json(t, model_id, prompt)
+        expl, rec = template_campaign(campaign)
+        used = False
+        if parsed:
+            summary = str(parsed.get("summary") or expl)
+            rec = str(parsed.get("recommended_action") or rec)
+            is_campaign = bool(parsed.get("is_campaign"))
+            confidence = float(parsed.get("confidence") or 0.0)
+            expl = (
+                f"[campaign={is_campaign}, confidence={confidence:.2f}] {summary}" if is_campaign else summary
+            )
+            campaign.concluded = is_campaign
+            used = True
+        self._on_case(campaign, expl, rec, used)
 
     async def _explain_qoe(self, t, model_id, snap: dict) -> None:
         prompt = (

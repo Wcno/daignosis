@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from sentinel_dns.models import DnsEvent
+from daignosis.models import DnsEvent
 
 BEACON_DOMAIN = "xjs83kavqpwm.xyz"
 BEACON_HOSTS = [

@@ -4,8 +4,8 @@ import threading
 import time
 from collections import deque
 
-from sentinel_dns.egress import GUARD
-from sentinel_dns.models import Incident
+from daignosis.egress import GUARD
+from daignosis.models import Incident
 
 
 class AppState:
@@ -18,6 +18,7 @@ class AppState:
         self.recent = deque(maxlen=40)
         self.incidents: list[Incident] = []
         self.alerts: list[dict] = []
+        self.cases: list[dict] = []
         self.qoe: dict[str, dict] = {}
         self.qvac_ready = False
         self.qvac_error: str | None = None
@@ -50,6 +51,11 @@ class AppState:
             self.alerts.insert(0, alert)
             del self.alerts[80:]
 
+    def add_case(self, case: dict) -> None:
+        with self.lock:
+            self.cases.insert(0, case)
+            del self.cases[30:]
+
     def set_qoe(self, snap: dict) -> None:
         with self.lock:
             self.qoe[snap["site"]] = snap
@@ -75,6 +81,7 @@ class AppState:
                 for i in self.incidents[:15]
             ]
             qoe = list(self.qoe.values())
+            cases = list(self.cases)
             recent = list(self.recent)
             processed = self.processed
             injected = self.injected
@@ -89,6 +96,7 @@ class AppState:
             "source": source,
             "recent": recent,
             "incidents": incidents,
+            "cases": cases,
             "qoe": qoe,
             "alerts": self.alerts[:10] if False else [],
             "qvac": {"ready": qvac_ready, "error": qvac_error},

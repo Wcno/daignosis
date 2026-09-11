@@ -37,11 +37,11 @@
     }
   ],
   "schemaVersion": 39,
-  "tags": ["sentinel-dns", "ovnicom"],
+  "tags": ["daignosis", "ovnicom"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timezone": "America/Panama",
-  "title": "Sentinel-DNS QoE",
-  "uid": "sentinel-dns-qoe",
+  "title": "dAIgnosis QoE",
+  "uid": "daignosis-qoe",
   "version": 1
 }

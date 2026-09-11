@@ -17,6 +17,15 @@ class EgressGuard:
         self.active = False
         self._orig_connect = None
         self._orig_create = None
+        self._feeds: set[str] = set()
+
+    def allow(self, host: str) -> None:
+        with self.lock:
+            if host:
+                self._feeds.add(str(host))
+
+    def _is_allowed(self, host: str) -> bool:
+        return host in ALLOWED or host in self._feeds
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -49,14 +58,14 @@ class EgressGuard:
 
         def connect(sock, address):
             host = address[0] if isinstance(address, tuple) else address
-            if str(host) not in ALLOWED:
+            if not guard._is_allowed(str(host)):
                 guard.note_blocked(str(host))
                 raise PermissionError(f"egress blocked: {host}")
             return guard._orig_connect(sock, address)
 
         def create_connection(address, *args, **kwargs):
             host = address[0]
-            if str(host) not in ALLOWED:
+            if not guard._is_allowed(str(host)):
                 guard.note_blocked(str(host))
                 raise PermissionError(f"egress blocked: {host}")
             return guard._orig_create(address, *args, **kwargs)
