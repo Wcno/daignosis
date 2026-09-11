@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 from sentinel_dns.models import DnsEvent, Finding, Incident
@@ -30,8 +31,19 @@ class CampaignCorrelator:
         self.min_hosts = min_hosts
         self.min_finding_types = min_finding_types
         self._windows: dict[tuple[str, str], _CampaignWindow] = {}
+        self._nxdomain: dict[str, deque[float]] = {}
+
+    def observe(self, event: DnsEvent) -> None:
+        if not event.site or event.rcode != "NXDOMAIN":
+            return
+        queries = self._nxdomain.setdefault(event.site, deque())
+        queries.append(event.ts)
+        cutoff = event.ts - self.window_seconds
+        while queries and queries[0] < cutoff:
+            queries.popleft()
 
     def feed(self, event: DnsEvent, findings: list[Finding]) -> Incident | None:
+        self.observe(event)
         if not findings or not event.site or not event.etld1:
             return None
         key = (event.site, event.etld1)
@@ -67,5 +79,8 @@ class CampaignCorrelator:
         incident.signals.append(
             f"Correlated {len(window.findings)} finding types across {len(window.hosts)} hosts in 60s"
         )
+        nxdomain_count = len(self._nxdomain.get(event.site, ()))
+        if nxdomain_count:
+            incident.signals.append(f"NXDOMAIN spike: {nxdomain_count} queries in 60s")
         window.emitted = True
         return incident

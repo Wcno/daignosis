@@ -81,7 +81,7 @@ Consola local: [http://127.0.0.1:8080](http://127.0.0.1:8080)
 
 El productor emite tráfico benigno para el warm-up.
 
-A los 45 segundos inyecta cinco hosts de Panama-East consultando el dominio DGA-like en cadencia de seis segundos.
+A los 45 segundos inyecta un spike NXDOMAIN y cinco hosts de Panama-East consultando el dominio DGA-like en cadencia de seis segundos.
 
 El correlador exige dos tipos de Finding, tres hosts y un indicador compartido en 60 segundos.
 

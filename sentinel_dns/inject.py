@@ -12,7 +12,7 @@ BEACON_HOSTS = [
     "190.14.206.133",
     "190.14.197.98",
 ]
-TYPO_DOMAIN = "micros0ft.com"
+NXDOMAIN_BURST_SIZE = 120
 
 
 class Scenario:
@@ -21,7 +21,6 @@ class Scenario:
         self.beacon_at = beacon_at
         self.degrade_at = degrade_at
         self._last_beacon = 0.0
-        self._typo_done = False
         self._burst_done = False
 
     def elapsed(self) -> float:
@@ -39,6 +38,22 @@ class Scenario:
         if self.beacon_on() and not self._burst_done:
             self._burst_done = True
             self._last_beacon = elapsed
+            for index in range(NXDOMAIN_BURST_SIZE):
+                out.append(
+                    DnsEvent(
+                        ts=now_wall,
+                        ts_raw="injected",
+                        client_ip=BEACON_HOSTS[index % len(BEACON_HOSTS)],
+                        port=54000 + index,
+                        qname=f"missing-{index}.demo.invalid",
+                        qtype="A",
+                        flags="+",
+                        server="172.19.1.2",
+                        injected=True,
+                        rcode="NXDOMAIN",
+                        latency_ms=33.0,
+                    )
+                )
             for ip in BEACON_HOSTS:
                 for k in range(6):
                     out.append(
@@ -74,21 +89,4 @@ class Scenario:
                         latency_ms=41.0,
                     )
                 )
-        if self.beacon_on() and not self._typo_done and elapsed >= self.beacon_at + 8:
-            self._typo_done = True
-            out.append(
-                DnsEvent(
-                    ts=now_wall,
-                    ts_raw="injected",
-                    client_ip=BEACON_HOSTS[0],
-                    port=53001,
-                    qname=TYPO_DOMAIN,
-                    qtype="A",
-                    flags="+",
-                    server="172.19.1.2",
-                    injected=True,
-                    rcode="NXDOMAIN",
-                    latency_ms=33.0,
-                )
-            )
         return out

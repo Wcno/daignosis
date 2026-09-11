@@ -94,6 +94,7 @@ class Pipeline:
         cap = SITE_CAPACITY.get(ev.site, 150.0)
         self.qoe.feed(ev.site, ev.customer, ev.zone, ev.latency_ms, ev.rcode == "NXDOMAIN", ev.timeout, cap)
         if not findings:
+            self.correlator.feed(ev, findings)
             return None
         self.state.add_findings(
             {
