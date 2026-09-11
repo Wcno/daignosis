@@ -64,13 +64,13 @@ python -m daignosis demo --kafka 127.0.0.1:9092 \
 
 El agente solo acepta endpoints Wazuh locales (`127.0.0.1`, `localhost` o `::1`); una URL pública se rechaza antes de iniciar. Sin `--wazuh-webhook`, la consola conserva el JSON compatible como contrato demostrable sin fingir una entrega al manager.
 
-### Camino completo con la IA local (correlación QVAC real)
+### Activa QVAC local
 
 ```bash
 pip install -r requirements-qvac.txt
 python -m tetherto.qvac_sdk install-worker
-python -m daignosis prefetch    # descarga el modelo antes de la demostración
-python -m daignosis demo        # explicación + veredicto de campaña en el dispositivo
+python -m daignosis prefetch
+python -m daignosis demo
 ```
 
 > Del stream al veredicto: detectar → correlacionar → priorizar → explicar → diagnosticar → mostrar impacto. Sin nube de inferencia.
