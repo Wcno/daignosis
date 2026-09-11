@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 
 from sentinel_dns.models import DnsEvent, Finding, Incident
@@ -30,7 +30,8 @@ class CampaignCorrelator:
         self.window_seconds = window_seconds
         self.min_hosts = min_hosts
         self.min_finding_types = min_finding_types
-        self._windows: dict[tuple[str, str], _CampaignWindow] = {}
+        self._windows: OrderedDict[tuple[str, str], _CampaignWindow] = OrderedDict()
+        self._window_cap = 20_000
         self._nxdomain: dict[str, deque[float]] = {}
 
     def observe(self, event: DnsEvent) -> None:
@@ -55,7 +56,10 @@ class CampaignCorrelator:
                 site=event.site,
                 domain=event.etld1,
             )
+            if key not in self._windows and len(self._windows) >= self._window_cap:
+                self._windows.popitem(last=False)
             self._windows[key] = window
+        self._windows.move_to_end(key)
         window.hosts.add(event.client_ip)
         for finding in findings:
             previous = window.findings.get(finding.kind)
