@@ -120,6 +120,37 @@ blockquote { margin: 1rem 0; color: var(--ink); font-size: 1rem; line-height: 1.
 .siem-log .lede { font-size: 0.85rem; }
 pre { background: #041116; color: var(--cyan); padding: 1rem; overflow: auto; max-height: 18rem; font-size: 0.75rem; border: 1px solid var(--line); }
 
+.app-footer {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 1.25rem max(1.25rem, 3vw) 1.8rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.app-footer strong {
+  display: block;
+  color: var(--ink);
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+}
+.app-footer span { margin-left: 0.7rem; }
+.app-footer > div:first-child span { margin-left: 0; }
+.footer-facts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.3rem 1rem; }
+.footer-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 0.35rem 1px 0;
+  border-radius: 50%;
+}
+.footer-dot.local { background: var(--cyan); }
+.footer-dot.sealed { background: var(--green); }
+
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--line); }
 ::selection { background: var(--cyan); color: var(--canvas); }
@@ -129,6 +160,8 @@ pre { background: #041116; color: var(--cyan); padding: 1rem; overflow: auto; ma
   .topline, .section-heading { align-items: start; flex-direction: column; gap: 0.8rem; }
   .seal { grid-template-columns: repeat(3, 1fr); }
   .split { grid-template-columns: 1fr; gap: 2.5rem; }
+  .app-footer { align-items: start; flex-direction: column; }
+  .footer-facts { justify-content: flex-start; }
 }
 
 @media (max-width: 560px) {

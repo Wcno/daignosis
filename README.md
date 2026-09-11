@@ -1,6 +1,90 @@
 # dAIgnosis
 
-**Una capa de inteligencia DNS soberana.** Convierte telemetría DNS en tiempo real (BIND o Kafka) en incidentes de seguridad priorizados y explicados y en diagnóstico proactivo de red, **100% dentro de la infraestructura del cliente**. Cero bytes de telemetría salen de tu red; la única inferencia corre en el dispositivo.
+![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-3776AB?logo=python&logoColor=white)
+![Licencia](https://img.shields.io/badge/Licencia-No%20especificada-lightgrey)
+![Lenguaje principal](https://img.shields.io/badge/Lenguaje%20principal-Python-3776AB?logo=python&logoColor=white)
+
+**Una capa de inteligencia DNS soberana.** Usa **QVAC en local** para convertir telemetría DNS en tiempo real en incidentes correlacionados, explicables y diagnóstico proactivo, **100% dentro de la infraestructura del cliente**.
+
+<!-- TODO: reemplazar con captura de la consola en acción -->
+![Consola dAIgnosis](./docs/qoe-dashboard.png)
+
+La consola concentra en una sola vista el stream Kafka, la correlación de campañas con QVAC local, la QoE por sitio, la alerta Wazuh y la prueba de cero egreso. Las capturas muestran estas garantías: **QVAC local**, **cero egreso de telemetría** y el recorrido `Kafka → detección → campaña → Wazuh`.
+
+![Flujo DNS e incidente prioritario](./docs/stream-and-incident.png)
+
+![Campañas correlacionadas y alerta Wazuh](./docs/campaigns-and-wazuh.png)
+
+## Pruébalo en 5 minutos
+
+**Con un solo comando** (verifica el air-gap, precarga el modelo QVAC si el SDK está instalado, lanza el demo con tu dataset y abre la consola en el navegador):
+
+```bash
+python -m daignosis smoke
+```
+
+[Consola: `http://127.0.0.1:8080`](http://127.0.0.1:8080) — sale con `Ctrl+C`.
+
+Sin SDK QVAC todavía, o sin abrir el navegador automáticamente:
+
+```bash
+python -m daignosis smoke --no-qvac --no-open
+```
+
+### Paso a paso
+
+```bash
+cd daignosis
+python -m daignosis prove-airgap          # prueba de soberanía: PASS
+python -m daignosis demo --data "../LogsDNSQueries 2/LogsDNSQueries"
+```
+
+Consola: [http://127.0.0.1:8080](http://127.0.0.1:8080)
+
+Sin dataset, genera tráfico benigno sintético e inyecta la campaña de ejemplo:
+
+```bash
+python -m daignosis demo --no-qvac
+```
+
+### Consumiendo de Kafka (stream real)
+
+```bash
+pip install -r requirements-kafka.txt
+python -m daignosis demo --kafka 10.0.0.5:9092,10.0.0.6:9092 --topic dns-queries --group daignosis
+```
+
+El guard anti-egreso autoriza **solo** los brokers indicados como fuente de ingesta; todo lo demás sigue bloqueado y analizado.
+
+Para entregar la misma alerta a un relay/API local de Wazuh, añade su endpoint loopback:
+
+```bash
+python -m daignosis demo --kafka 127.0.0.1:9092 \
+  --wazuh-webhook http://127.0.0.1:55000/daignosis
+```
+
+El agente solo acepta endpoints Wazuh locales (`127.0.0.1`, `localhost` o `::1`); una URL pública se rechaza antes de iniciar. Sin `--wazuh-webhook`, la consola conserva el JSON compatible como contrato demostrable sin fingir una entrega al manager.
+
+### Camino completo con la IA local (correlación QVAC real)
+
+```bash
+pip install -r requirements-qvac.txt
+python -m tetherto.qvac_sdk install-worker
+python -m daignosis prefetch    # descarga el modelo ANTES del video
+python -m daignosis demo        # explicación + veredicto de campaña en el dispositivo
+```
+
+### Guion del demo (la historia comercial)
+
+| t | Qué mostrar |
+|---|-------------|
+| 0:00 | Consola en `127.0.0.1:8080`. Esclusa del canal **cerrada**: Cloud AI 0, bytes salientes 0. |
+| 0:45 | Cinco hosts de Panama-East consultan `xjs83kavqpwm.xyz` con cadencia ~6 s. |
+| ~1:15 | Risk alto → QVAC explica en el dispositivo → alerta SIEM en pantalla. |
+| ~2:00 | **Correlación done**: 4 hosts + el mismo dominio + cadencia → QVAC veredicta *campaña coordinada*, no eventos aislados. La alerta pasa de "hay algo raro" a "hay una campaña". |
+| 2:30 | Panama-East sube a ~96 ms. QoE cae **contra su propio baseline** (la latencia normal del sitio ya era buena). Causa = latencia. |
+| 4:00 | Impacto en negocio: consultas afectadas × segundos; el panel de soberanía sigue en 0. |
+| 4:30 | `python -m daignosis prove-airgap` → **PASS**. La promesa se demuestra en vivo. |
 
 > Del stream al veredicto: detectar → correlacionar → priorizar → explicar → diagnosticar → mostrar impacto. Sin nube de inferencia.
 
@@ -84,77 +168,6 @@ BIND queries.* | Kafka (dns-queries, texto/JSON) | sintético
 ```
 
 QVAC **no** ve cada query; recibe evidencia ya calculada y decisiones difíciles: correlación y narrativa. El dispositivo no vuelca el stream, solo la conclusión.
-
-## Pruébalo en 5 minutos
-
-**Con un solo comando** (verifica el air-gap, precarga el modelo QVAC si el SDK está instalado, lanza el demo con tu dataset y abre la consola en el navegador):
-
-```bash
-python -m daignosis smoke
-```
-
-[Consola: `http://127.0.0.1:8080`](http://127.0.0.1:8080) — sale con `Ctrl+C`.
-
-Sin SDK QVAC todavía, o sin abrir el navegador automáticamente:
-
-```bash
-python -m daignosis smoke --no-qvac --no-open
-```
-
-### Paso a paso
-
-```bash
-cd daignosis
-python -m daignosis prove-airgap          # prueba de soberanía: PASS
-python -m daignosis demo --data "../LogsDNSQueries 2/LogsDNSQueries"
-```
-
-Consola: [http://127.0.0.1:8080](http://127.0.0.1:8080)
-
-Sin dataset, genera tráfico benigno sintético e inyecta la campaña de ejemplo:
-
-```bash
-python -m daignosis demo --no-qvac
-```
-
-### Consumiendo de Kafka (stream real)
-
-```bash
-pip install -r requirements-kafka.txt
-python -m daignosis demo --kafka 10.0.0.5:9092,10.0.0.6:9092 --topic dns-queries --group daignosis
-```
-
-El guard anti-egreso autoriza **solo** los brokers indicados como fuente de ingesta; todo lo demás sigue bloqueado y analizado.
-
-Para entregar la misma alerta a un relay/API local de Wazuh, añade su endpoint loopback:
-
-```bash
-python -m daignosis demo --kafka 127.0.0.1:9092 \
-  --wazuh-webhook http://127.0.0.1:55000/daignosis
-```
-
-El agente solo acepta endpoints Wazuh locales (`127.0.0.1`, `localhost` o `::1`); una URL pública se rechaza antes de iniciar. Sin `--wazuh-webhook`, la consola conserva el JSON compatible como contrato demostrable sin fingir una entrega al manager.
-
-### Camino completo con la IA local (correlación QVAC real)
-
-```bash
-pip install -r requirements-qvac.txt
-python -m tetherto.qvac_sdk install-worker
-python -m daignosis prefetch    # descarga el modelo ANTES del video
-python -m daignosis demo        # explicación + veredicto de campaña en el dispositivo
-```
-
-### Guion del demo (la historia comercial)
-
-| t | Qué mostrar |
-|---|-------------|
-| 0:00 | Consola en `127.0.0.1:8080`. Esclusa del canal **cerrada**: Cloud AI 0, bytes salientes 0. |
-| 0:45 | Cinco hosts de Panama-East consultan `xjs83kavqpwm.xyz` con cadencia ~6 s. |
-| ~1:15 | Risk alto → QVAC explica en el dispositivo → alerta SIEM en pantalla. |
-| ~2:00 | **Correlación done**: 4 hosts + el mismo dominio + cadencia → QVAC veredicta *campaña coordinada*, no eventos aislados. La alerta pasa de "hay algo raro" a "hay una campaña". |
-| 2:30 | Panama-East sube a ~96 ms. QoE cae **contra su propio baseline** (la latencia normal del sitio ya era buena). Causa = latencia. |
-| 4:00 | Impacto en negocio: consultas afectadas × segundos; el panel de soberanía sigue en 0. |
-| 4:30 | `python -m daignosis prove-airgap` → **PASS**. La promesa se demuestra en vivo. |
 
 ## Stack y requisitos
 
