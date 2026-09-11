@@ -65,6 +65,8 @@ class KafkaPublisher:
 
 
 class KafkaEventSource(Iterator[DnsEvent]):
+    live = True
+
     def __init__(
         self,
         bootstrap_servers: str,
@@ -79,6 +81,7 @@ class KafkaEventSource(Iterator[DnsEvent]):
             group_id=group_id,
             auto_offset_reset="latest",
             enable_auto_commit=True,
+            consumer_timeout_ms=250,
             value_deserializer=decode_event,
         )
         self._messages = iter(self._consumer)

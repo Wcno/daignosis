@@ -203,18 +203,14 @@ class Explainer:
             + json.dumps(payload)
         )
         parsed = await self._complete_json(transport, model_id, prompt)
-        required = {"incident_type", "severity", "confidence", "explanation", "recommended_action"}
-        if not parsed or not required.issubset(parsed):
+        if not parsed or not parsed.get("explanation") or not parsed.get("recommended_action"):
             self._fail_incident(inc, "QVAC returned an invalid incident correlation")
             return
-        severity = str(parsed["severity"]).lower()
-        confidence = str(parsed["confidence"]).lower()
-        if severity not in {"critical", "high", "medium"} or confidence not in {"high", "medium", "low"}:
-            self._fail_incident(inc, "QVAC returned invalid severity or confidence")
-            return
-        inc.kind = str(parsed["incident_type"]).strip() or inc.kind
-        inc.severity = severity
-        inc.confidence = confidence
+        severity = str(parsed.get("severity", inc.severity)).lower()
+        confidence = str(parsed.get("confidence", "medium")).lower()
+        inc.kind = str(parsed.get("incident_type", inc.kind)).strip() or inc.kind
+        inc.severity = severity if severity in {"critical", "high", "medium"} else inc.severity
+        inc.confidence = confidence if confidence in {"high", "medium", "low"} else "medium"
         inc.explanation = str(parsed["explanation"]).strip()
         inc.recommended_action = str(parsed["recommended_action"]).strip()
         if not inc.explanation or not inc.recommended_action:

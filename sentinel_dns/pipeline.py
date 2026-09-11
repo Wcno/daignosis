@@ -117,13 +117,13 @@ class Pipeline:
             self.sink.write_qoe(snap)
             if status != "ok" and prev != status:
                 self._last_qoe_explain[snap["site"]] = status
-                self.explainer.submit_qoe(snap)
             elif status == "ok":
                 self._last_qoe_explain[snap["site"]] = "ok"
 
     def run(self, source: Iterator[DnsEvent]) -> None:
         self.explainer.start(self._on_explained, self._on_qoe_explained, self._on_qvac_error)
         batch: list[DnsEvent] = []
+        last_batch_flush = time.monotonic()
         last_sleep_check = time.monotonic()
         try:
             while not self.stop:
@@ -140,12 +140,17 @@ class Pipeline:
                 except StopIteration:
                     if batch:
                         self._flush_batch(batch)
+                        batch = []
+                        last_batch_flush = time.monotonic()
+                    if getattr(source, "live", False):
+                        continue
                     break
                 batch.append(ev)
-                if len(batch) >= self.batch_size:
+                now = time.monotonic()
+                if len(batch) >= self.batch_size or now - last_batch_flush >= 0.25:
                     self._flush_batch(batch)
                     batch = []
-                now = time.monotonic()
+                    last_batch_flush = now
                 if now - last_sleep_check > 0.25:
                     last_sleep_check = now
                     time.sleep(0.001)
