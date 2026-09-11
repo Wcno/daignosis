@@ -1,12 +1,11 @@
 # dAIgnosis
 
 ![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-3776AB?logo=python&logoColor=white)
-![Licencia](https://img.shields.io/badge/Licencia-No%20especificada-lightgrey)
+![Licencia](https://img.shields.io/badge/Licencia-MIT-green?style=flat)
 ![Lenguaje principal](https://img.shields.io/badge/Lenguaje%20principal-Python-3776AB?logo=python&logoColor=white)
 
 **Una capa de inteligencia DNS soberana.** Usa **QVAC en local** para convertir telemetría DNS en tiempo real en incidentes correlacionados, explicables y diagnóstico proactivo, **100% dentro de la infraestructura del cliente**.
 
-<!-- TODO: reemplazar con captura de la consola en acción -->
 ![Consola dAIgnosis](./docs/qoe-dashboard.png)
 
 La consola concentra en una sola vista el stream Kafka, la correlación de campañas con QVAC local, la QoE por sitio, la alerta Wazuh y la prueba de cero egreso. Las capturas muestran estas garantías: **QVAC local**, **cero egreso de telemetría** y el recorrido `Kafka → detección → campaña → Wazuh`.
@@ -70,7 +69,7 @@ El agente solo acepta endpoints Wazuh locales (`127.0.0.1`, `localhost` o `::1`)
 ```bash
 pip install -r requirements-qvac.txt
 python -m tetherto.qvac_sdk install-worker
-python -m daignosis prefetch    # descarga el modelo ANTES del video
+python -m daignosis prefetch    # descarga el modelo antes de la demostración
 python -m daignosis demo        # explicación + veredicto de campaña en el dispositivo
 ```
 
@@ -207,4 +206,4 @@ python -m unittest discover -s tests -v
 
 ## Licencia
 
-Entrega de hackathon. No se exige licencia abierta.
+Este proyecto está disponible bajo la [licencia MIT](./LICENSE).
