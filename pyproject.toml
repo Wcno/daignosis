@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Local DNS intelligence agent for Ovnicom / QVAC Track 04"
 requires-python = ">=3.10"
 readme = "README.md"
+dependencies = ["kafka-python>=2.0.2,<3"]
 
 [project.optional-dependencies]
 qvac = ["tetherto-qvac-sdk"]

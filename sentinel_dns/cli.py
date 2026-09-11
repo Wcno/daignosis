@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 import threading
@@ -9,9 +10,13 @@ from pathlib import Path
 from sentinel_dns.clickhouse import MetricSink
 from sentinel_dns.egress import GUARD
 from sentinel_dns.pipeline import Pipeline, open_source
+from sentinel_dns.producer import DemoProducer
 from sentinel_dns.qvac_explain import Explainer
+from sentinel_dns.qvac_runtime import prepare_worker_runtime
 from sentinel_dns.server import serve
 from sentinel_dns.state import AppState
+from sentinel_dns.stream import CONSUMER_GROUP, TOPIC, KafkaEventSource, KafkaPublisher
+from sentinel_dns.webhook import WazuhWebhook
 
 
 def _resolve_sdk_dir() -> str | None:
@@ -31,8 +36,7 @@ def _default_data() -> Path | None:
     return candidate if candidate.is_dir() else None
 
 
-def cmd_demo(args: argparse.Namespace) -> int:
-    data = Path(args.data) if args.data else _default_data()
+def _run_agent(args: argparse.Namespace, source, source_name: str, inject_scenario: bool) -> int:
     cache = Path(args.cache)
     cache.mkdir(parents=True, exist_ok=True)
     var = Path(args.var)
@@ -40,31 +44,60 @@ def cmd_demo(args: argparse.Namespace) -> int:
     if not args.no_airgap:
         GUARD.install()
     state = AppState()
-    state.source = str(data) if data and data.exists() else "synthetic-benign+inject"
+    state.source = source_name
     explainer = Explainer(cache_dir=cache, enabled=not args.no_qvac)
     sink = MetricSink(url=args.clickhouse, var_dir=var)
-    pipe = Pipeline(state=state, explainer=explainer, sink=sink, batch_size=args.batch)
-    source = open_source(data if data and data.exists() else None, args.file)
+    webhook_url = args.wazuh_webhook or f"http://{args.host}:{args.port}/ingest/wazuh"
+    webhook = WazuhWebhook(webhook_url)
+    pipe = Pipeline(
+        state=state,
+        explainer=explainer,
+        sink=sink,
+        webhook=webhook,
+        batch_size=args.batch,
+        inject_scenario=inject_scenario,
+    )
     httpd = serve(state, args.host, args.port)
     t_http = threading.Thread(target=httpd.serve_forever, name="http", daemon=True)
     t_http.start()
-    print(f"Sentinel-DNS http://{args.host}:{args.port}  source={state.source}", flush=True)
+    print(f"Sentinel-DNS http://{args.host}:{args.port} source={state.source}", flush=True)
     try:
         pipe.run(source)
     finally:
         pipe.stop = True
         httpd.shutdown()
+        httpd.server_close()
         GUARD.restore()
     return 0
 
 
-def cmd_prefetch(args: argparse.Namespace) -> int:
-    import asyncio
+def cmd_demo(args: argparse.Namespace) -> int:
+    data = Path(args.data) if args.data else _default_data()
+    source = open_source(data if data and data.exists() else None, args.file)
+    source_name = str(data) if data and data.exists() else "synthetic-benign+inject"
+    return _run_agent(args, source, source_name, inject_scenario=True)
 
+
+def cmd_consume(args: argparse.Namespace) -> int:
+    source = KafkaEventSource(args.bootstrap, topic=args.topic, group_id=args.group)
+    return _run_agent(args, source, f"kafka:{args.topic} group={args.group}", inject_scenario=False)
+
+
+def cmd_produce(args: argparse.Namespace) -> int:
+    data = Path(args.data) if args.data else _default_data()
+    source = open_source(data if data and data.exists() else None, args.file)
+    publisher = KafkaPublisher(args.bootstrap, topic=args.topic)
+    print(f"Sentinel DNS producer topic={args.topic}", flush=True)
+    DemoProducer(publisher, source, qps=args.qps).run()
+    return 0
+
+
+def cmd_prefetch(args: argparse.Namespace) -> int:
     cache = Path(args.cache)
     cache.mkdir(parents=True, exist_ok=True)
 
     async def go() -> None:
+        prepare_worker_runtime()
         from tetherto.qvac_sdk import Client, load_model, unload_model
         from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
 
@@ -108,29 +141,49 @@ def cmd_airgap(args: argparse.Namespace) -> int:
         GUARD.restore()
 
 
+def _add_agent_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--batch", type=int, default=512)
+    parser.add_argument("--cache", default=".qvac-cache")
+    parser.add_argument("--var", default="var")
+    parser.add_argument("--clickhouse", default="http://127.0.0.1:8123")
+    parser.add_argument("--wazuh-webhook", default=None)
+    parser.add_argument("--no-qvac", action="store_true")
+    parser.add_argument("--no-airgap", action="store_true")
+
+
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="sentinel-dns")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    parser = argparse.ArgumentParser(prog="sentinel-dns")
+    sub = parser.add_subparsers(dest="cmd", required=True)
 
-    d = sub.add_parser("demo")
-    d.add_argument("--data", default=None)
-    d.add_argument("--file", default="queries.0")
-    d.add_argument("--host", default="127.0.0.1")
-    d.add_argument("--port", type=int, default=8080)
-    d.add_argument("--batch", type=int, default=512)
-    d.add_argument("--cache", default=".qvac-cache")
-    d.add_argument("--var", default="var")
-    d.add_argument("--clickhouse", default="http://127.0.0.1:8123")
-    d.add_argument("--no-qvac", action="store_true")
-    d.add_argument("--no-airgap", action="store_true")
-    d.set_defaults(func=cmd_demo)
+    demo = sub.add_parser("demo")
+    demo.add_argument("--data", default=None)
+    demo.add_argument("--file", default="queries.0")
+    _add_agent_args(demo)
+    demo.set_defaults(func=cmd_demo)
 
-    pf = sub.add_parser("prefetch")
-    pf.add_argument("--cache", default=".qvac-cache")
-    pf.set_defaults(func=cmd_prefetch)
+    produce = sub.add_parser("produce")
+    produce.add_argument("--data", default=None)
+    produce.add_argument("--file", default="queries.0")
+    produce.add_argument("--bootstrap", default="127.0.0.1:9092")
+    produce.add_argument("--topic", default=TOPIC)
+    produce.add_argument("--qps", type=float, default=420.0)
+    produce.set_defaults(func=cmd_produce)
 
-    pa = sub.add_parser("prove-airgap")
-    pa.set_defaults(func=cmd_airgap)
+    consume = sub.add_parser("consume")
+    consume.add_argument("--bootstrap", default="127.0.0.1:9092")
+    consume.add_argument("--topic", default=TOPIC)
+    consume.add_argument("--group", default=CONSUMER_GROUP)
+    _add_agent_args(consume)
+    consume.set_defaults(func=cmd_consume)
 
-    args = p.parse_args(argv)
+    prefetch = sub.add_parser("prefetch")
+    prefetch.add_argument("--cache", default=".qvac-cache")
+    prefetch.set_defaults(func=cmd_prefetch)
+
+    airgap = sub.add_parser("prove-airgap")
+    airgap.set_defaults(func=cmd_airgap)
+
+    args = parser.parse_args(argv)
     return args.func(args)

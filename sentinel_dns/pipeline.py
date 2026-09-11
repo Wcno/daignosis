@@ -5,16 +5,17 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from sentinel_dns.clickhouse import MetricSink
+from sentinel_dns.correlation import CampaignCorrelator
 from sentinel_dns.detect import DetectorBank
 from sentinel_dns.features import extract
 from sentinel_dns.inject import Scenario
 from sentinel_dns.models import DnsEvent, Incident
-from sentinel_dns.overlay import Overlay, lookup_site
+from sentinel_dns.overlay import Overlay
 from sentinel_dns.qoe import QoeEngine
-from sentinel_dns.qvac_explain import Explainer, qoe_template, template_explain
-from sentinel_dns.risk import aggregate
+from sentinel_dns.qvac_explain import Explainer, qoe_template
 from sentinel_dns.state import AppState
 from sentinel_dns.wazuh import format_alert
+from sentinel_dns.webhook import WazuhWebhook
 
 SITE_CAPACITY = {
     "Panama-East": 400.0,
@@ -32,17 +33,21 @@ class Pipeline:
         state: AppState,
         explainer: Explainer,
         sink: MetricSink,
+        webhook: WazuhWebhook,
         batch_size: int = 512,
+        inject_scenario: bool = True,
     ) -> None:
         self.state = state
         self.explainer = explainer
         self.sink = sink
+        self.webhook = webhook
         self.batch_size = batch_size
+        self.inject_scenario = inject_scenario
         self.overlay = Overlay()
         self.detectors = DetectorBank()
+        self.correlator = CampaignCorrelator()
         self.qoe = QoeEngine()
         self.scenario = Scenario()
-        self._cooldown: dict[tuple[str, str], float] = {}
         self._last_qoe_explain: dict[str, str] = {}
         self.stop = False
         self._pace_qps = 420.0
@@ -50,13 +55,11 @@ class Pipeline:
         self._pace_n = 0
 
     def _emit_incident(self, inc: Incident) -> None:
-        if not inc.explanation:
-            expl, rec = template_explain(inc)
-            inc.explanation = expl
-            inc.recommended_action = rec
+        if not inc.qvac_used:
+            return
         alert = format_alert(inc)
-        inc.wazuh_sent = True
-        self.state.add_incident(inc, alert)
+        inc.wazuh_sent = self.webhook.deliver(alert)
+        self.state.add_incident(inc)
         self.sink.write_incident(
             {
                 "ts": inc.ts,
@@ -77,25 +80,32 @@ class Pipeline:
         self.state.set_qoe(snap)
         self.sink.write_qoe(snap)
 
+    def _on_qvac_error(self, message: str) -> None:
+        self.state.qvac_error = message
+
+    def _normalize_for_legacy_source(self, ev: DnsEvent) -> None:
+        if not ev.site:
+            self.overlay.enrich(ev)
+
     def process_event(self, ev: DnsEvent) -> Incident | None:
-        self.overlay.enrich(ev)
+        self._normalize_for_legacy_source(ev)
         feats = extract(ev)
         findings = self.detectors.feed(ev, feats)
         cap = SITE_CAPACITY.get(ev.site, 150.0)
         self.qoe.feed(ev.site, ev.customer, ev.zone, ev.latency_ms, ev.rcode == "NXDOMAIN", ev.timeout, cap)
         if not findings:
             return None
-        hosts = self.detectors.affected(ev.etld1)
-        inc = aggregate(ev.ts, ev.etld1 or ev.qname, findings, hosts, ev.customer, ev.site)
-        if inc is None:
-            return None
-        key = (inc.kind, inc.domain)
-        now = time.monotonic()
-        last = self._cooldown.get(key, 0.0)
-        if now - last < 45.0:
-            return None
-        self._cooldown[key] = now
-        return inc
+        self.state.add_findings(
+            {
+                "ts": ev.ts,
+                "domain": ev.etld1 or ev.qname,
+                "host": ev.client_ip,
+                "site": ev.site,
+                "customer": ev.customer,
+            },
+            [{"kind": finding.kind, "score": round(finding.score, 3), "detail": finding.detail} for finding in findings],
+        )
+        return self.correlator.feed(ev, findings)
 
     def _flush_qoe(self) -> None:
         for snap in self.qoe.flush_due():
@@ -111,27 +121,25 @@ class Pipeline:
                 self._last_qoe_explain[snap["site"]] = "ok"
 
     def run(self, source: Iterator[DnsEvent]) -> None:
-        self.explainer.start(self._on_explained, self._on_qoe_explained)
+        self.explainer.start(self._on_explained, self._on_qoe_explained, self._on_qvac_error)
         batch: list[DnsEvent] = []
         last_sleep_check = time.monotonic()
         try:
             while not self.stop:
-                if self.scenario.degrade_on():
+                if self.inject_scenario and self.scenario.degrade_on():
                     self.overlay.degrade("Panama-East")
-                for extra in self.scenario.due_events(time.time()):
-                    batch.append(extra)
-                    if len(batch) >= self.batch_size:
-                        self._flush_batch(batch)
-                        batch = []
+                if self.inject_scenario:
+                    for extra in self.scenario.due_events(time.time()):
+                        batch.append(extra)
+                        if len(batch) >= self.batch_size:
+                            self._flush_batch(batch)
+                            batch = []
                 try:
                     ev = next(source)
                 except StopIteration:
                     if batch:
                         self._flush_batch(batch)
-                    time.sleep(0.05)
-                    if self.stop:
-                        break
-                    continue
+                    break
                 batch.append(ev)
                 if len(batch) >= self.batch_size:
                     self._flush_batch(batch)
@@ -146,6 +154,9 @@ class Pipeline:
             if batch:
                 self._flush_batch(batch)
             self.explainer.stop()
+            close = getattr(source, "close", None)
+            if close:
+                close()
 
     def _flush_batch(self, batch: list[DnsEvent]) -> None:
         sample = []
@@ -179,9 +190,6 @@ class Pipeline:
         if ahead > 0:
             time.sleep(ahead)
         for inc in pending:
-            expl, rec = template_explain(inc)
-            inc.explanation = expl
-            inc.recommended_action = rec
             self.explainer.submit_incident(inc)
         self._flush_qoe()
         self.state.qvac_ready = self.explainer.ready

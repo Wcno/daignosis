@@ -37,7 +37,7 @@ function render(s) {
   const sealed = (s.sovereignty.external_data_transmitted_bytes || 0) === 0 && (s.sovereignty.cloud_ai_calls || 0) === 0;
   gate.dataset.sealed = sealed ? "true" : "false";
   document.getElementById("seal-state").textContent = sealed ? "cerrada" : "abierta — fugas";
-  flowMeta.textContent = `${s.qps} q/s · origen ${s.source} · QVAC ${s.qvac.ready ? "listo" : (s.qvac.error || "cargando o plantilla")}`;
+  flowMeta.textContent = `${s.qps} q/s · origen ${s.source} · QVAC ${s.qvac.ready ? "listo" : (s.qvac.error || "cargando")}`;
 
   chambersEl.replaceChildren();
   const sites = (s.qoe || []).slice().sort((a, b) => a.site.localeCompare(b.site));
@@ -66,7 +66,7 @@ function render(s) {
     incidentEmpty.hidden = true;
     incidentEl.hidden = false;
     document.getElementById("risk").textContent = inc.risk_score;
-    document.getElementById("inc-title").textContent = `${inc.severity} · ${inc.kind}`;
+    document.getElementById("inc-title").textContent = `${inc.severity} · ${inc.kind} · confianza ${inc.confidence || "pendiente"}`;
     document.getElementById("inc-domain").textContent = inc.domain;
     const ul = document.getElementById("inc-signals");
     ul.replaceChildren();
@@ -78,7 +78,7 @@ function render(s) {
     document.getElementById("inc-explain").textContent = inc.explanation || "";
     document.getElementById("inc-action").textContent = inc.recommended_action || "";
     document.getElementById("inc-siem").textContent = inc.wazuh_sent
-      ? `Alerta en formato Wazuh lista · QVAC ${inc.qvac_used ? "sí" : "plantilla"}`
+      ? `Webhook Wazuh entregado · QVAC local ${inc.qvac_used ? "sí" : "no"}`
       : "";
   }
 

@@ -16,6 +16,7 @@ class AppState:
         self.injected = 0
         self.window = deque()
         self.recent = deque(maxlen=40)
+        self.findings: list[dict] = []
         self.incidents: list[Incident] = []
         self.alerts: list[dict] = []
         self.qoe: dict[str, dict] = {}
@@ -43,12 +44,15 @@ class AppState:
             total = sum(n for _, n in self.window)
         return total / span if span > 0 else 0.0
 
-    def add_incident(self, inc: Incident, alert: dict) -> None:
+    def add_findings(self, event: dict, findings: list[dict]) -> None:
+        with self.lock:
+            self.findings.insert(0, {"event": event, "findings": findings})
+            del self.findings[80:]
+
+    def add_incident(self, inc: Incident) -> None:
         with self.lock:
             self.incidents.insert(0, inc)
             del self.incidents[80:]
-            self.alerts.insert(0, alert)
-            del self.alerts[80:]
 
     def set_qoe(self, snap: dict) -> None:
         with self.lock:
@@ -56,6 +60,7 @@ class AppState:
 
     def snapshot(self) -> dict:
         with self.lock:
+            findings = list(self.findings)[:20]
             incidents = [
                 {
                     "ts": i.ts,
@@ -69,6 +74,7 @@ class AppState:
                     "site": i.site,
                     "explanation": i.explanation,
                     "recommended_action": i.recommended_action,
+                    "confidence": i.confidence,
                     "qvac_used": i.qvac_used,
                     "wazuh_sent": i.wazuh_sent,
                 }
@@ -88,6 +94,7 @@ class AppState:
             "uptime_s": round(time.time() - self.started, 1),
             "source": source,
             "recent": recent,
+            "findings": findings,
             "incidents": incidents,
             "qoe": qoe,
             "alerts": self.alerts[:10] if False else [],

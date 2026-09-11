@@ -45,5 +45,6 @@ class Incident:
     site: str
     explanation: str = ""
     recommended_action: str = ""
+    confidence: str = ""
     qvac_used: bool = False
     wazuh_sent: bool = False
