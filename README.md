@@ -73,18 +73,6 @@ python -m daignosis prefetch    # descarga el modelo antes de la demostración
 python -m daignosis demo        # explicación + veredicto de campaña en el dispositivo
 ```
 
-### Guion del demo (la historia comercial)
-
-| t | Qué mostrar |
-|---|-------------|
-| 0:00 | Consola en `127.0.0.1:8080`. Esclusa del canal **cerrada**: Cloud AI 0, bytes salientes 0. |
-| 0:45 | Cinco hosts de Panama-East consultan `xjs83kavqpwm.xyz` con cadencia ~6 s. |
-| ~1:15 | Risk alto → QVAC explica en el dispositivo → alerta SIEM en pantalla. |
-| ~2:00 | **Correlación done**: 4 hosts + el mismo dominio + cadencia → QVAC veredicta *campaña coordinada*, no eventos aislados. La alerta pasa de "hay algo raro" a "hay una campaña". |
-| 2:30 | Panama-East sube a ~96 ms. QoE cae **contra su propio baseline** (la latencia normal del sitio ya era buena). Causa = latencia. |
-| 4:00 | Impacto en negocio: consultas afectadas × segundos; el panel de soberanía sigue en 0. |
-| 4:30 | `python -m daignosis prove-airgap` → **PASS**. La promesa se demuestra en vivo. |
-
 > Del stream al veredicto: detectar → correlacionar → priorizar → explicar → diagnosticar → mostrar impacto. Sin nube de inferencia.
 
 ---
