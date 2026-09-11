@@ -1,7 +1,7 @@
 import unittest
 
 from sentinel_dns.models import DnsEvent
-from sentinel_dns.stream import decode_event, encode_event
+from sentinel_dns.stream import assert_local_bootstrap, decode_event, encode_event
 
 
 class StreamContractTests(unittest.TestCase):
@@ -29,6 +29,10 @@ class StreamContractTests(unittest.TestCase):
         decoded = decode_event(encode_event(original))
 
         self.assertEqual(decoded, original)
+
+    def test_rejects_non_local_kafka_broker(self):
+        with self.assertRaises(PermissionError):
+            assert_local_bootstrap("kafka.example.com:9092")
 
 
 if __name__ == "__main__":

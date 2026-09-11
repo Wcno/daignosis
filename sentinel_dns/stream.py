@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterator
 from dataclasses import asdict
 
+from sentinel_dns.egress import ALLOWED
 from sentinel_dns.models import DnsEvent
 
 TOPIC = "dns.telemetry.v1"
@@ -28,6 +29,13 @@ def decode_event(raw: bytes) -> DnsEvent:
     return DnsEvent(**event)
 
 
+def assert_local_bootstrap(bootstrap_servers: str) -> None:
+    for endpoint in bootstrap_servers.split(","):
+        host = endpoint.strip().rsplit(":", 1)[0].strip("[]")
+        if host not in ALLOWED:
+            raise PermissionError(f"Kafka broker must be local: {host}")
+
+
 def _kafka_classes():
     try:
         from kafka import KafkaConsumer, KafkaProducer
@@ -38,6 +46,7 @@ def _kafka_classes():
 
 class KafkaPublisher:
     def __init__(self, bootstrap_servers: str, topic: str = TOPIC) -> None:
+        assert_local_bootstrap(bootstrap_servers)
         _, producer_class = _kafka_classes()
         self.topic = topic
         self._producer = producer_class(
@@ -62,6 +71,7 @@ class KafkaEventSource(Iterator[DnsEvent]):
         topic: str = TOPIC,
         group_id: str = CONSUMER_GROUP,
     ) -> None:
+        assert_local_bootstrap(bootstrap_servers)
         consumer_class, _ = _kafka_classes()
         self._consumer = consumer_class(
             topic,
