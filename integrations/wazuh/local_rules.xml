@@ -1,0 +1,11 @@
+<group name="sentinel-dns,">
+  <rule id="100001" level="12">
+    <decoded_as>sentinel-dns</decoded_as>
+    <description>Sentinel-DNS high-risk DNS incident</description>
+    <mitre>
+      <id>T1071.004</id>
+      <id>T1568.002</id>
+    </mitre>
+    <group>dga,c2,</group>
+  </rule>
+</group>

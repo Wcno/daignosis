@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentinel-DNS — esclusa local</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="lockhead">
+    <div class="gate" id="gate" data-sealed="true" aria-hidden="true"></div>
+    <div class="lockhead-copy">
+      <h1>Sentinel-DNS</h1>
+      <p>La telemetría DNS queda en la esclusa. Inferencia QVAC en este equipo. Nada sale al mar.</p>
+    </div>
+    <dl class="seal" id="seal">
+      <div>
+        <dt>Esclusa</dt>
+        <dd id="seal-state">cerrada</dd>
+      </div>
+      <div>
+        <dt>Bytes hacia afuera</dt>
+        <dd id="egress">0</dd>
+      </div>
+      <div>
+        <dt>Llamadas de IA en la nube</dt>
+        <dd id="cloud">0</dd>
+      </div>
+      <div>
+        <dt>Consultas vistas</dt>
+        <dd id="seen">0</dd>
+      </div>
+    </dl>
+  </header>
+
+  <main>
+    <section class="chambers" aria-label="Calidad por sitio">
+      <h2>Cámaras del canal</h2>
+      <p class="lede">Cada cámara es un sitio. El nivel de agua es el QoE. Si baja, el operador ve la causa, no un número suelto.</p>
+      <div id="chambers" class="chamber-row"></div>
+    </section>
+
+    <div class="split">
+      <section class="flow" aria-label="Tráfico DNS">
+        <h2>Flujo en la esclusa</h2>
+        <p class="meta" id="flow-meta">esperando stream</p>
+        <ol id="flow"></ol>
+      </section>
+
+      <section class="incident" aria-label="Incidente de seguridad">
+        <h2>Puerta de amenaza</h2>
+        <div id="incident-empty" class="empty">Todavía no hay incidente por encima del umbral. El filtro heurístico sigue leyendo el stream.</div>
+        <article id="incident" hidden>
+          <p class="risk"><span id="risk">0</span><small>/100</small></p>
+          <h3 id="inc-title"></h3>
+          <p id="inc-domain" class="domain"></p>
+          <ul id="inc-signals"></ul>
+          <blockquote id="inc-explain"></blockquote>
+          <p id="inc-action"></p>
+          <p class="siem" id="inc-siem"></p>
+        </article>
+      </section>
+    </div>
+
+    <section class="siem-log" aria-label="Alertas formato Wazuh">
+      <h2>Lo que recibiría Wazuh</h2>
+      <p class="lede">JSON de alerta local, mismo esquema que <code>alerts.json</code>. El manager no tiene que estar instalado para demostrar el contrato.</p>
+      <pre id="wazuh"></pre>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

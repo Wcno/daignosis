@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.qvac-cache/
+var/
+*.jsonl
+.DS_Store
+LogsDNSQueries*/
+*.gguf
+.idea/
+.vscode/

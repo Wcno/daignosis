@@ -1,0 +1,15 @@
+[project]
+name = "sentinel-dns"
+version = "0.1.0"
+description = "Local DNS intelligence agent for Ovnicom / QVAC Track 04"
+requires-python = ">=3.10"
+readme = "README.md"
+
+[project.optional-dependencies]
+qvac = ["tetherto-qvac-sdk"]
+
+[project.scripts]
+sentinel-dns = "sentinel_dns.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sentinel_dns*"]

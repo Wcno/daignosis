@@ -1,0 +1,47 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "QoE by site",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT ts, site, qoe_score FROM qoe_metrics WHERE ts > now() - INTERVAL 1 HOUR ORDER BY ts",
+          "format": 1,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Incidents",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT ts, site, domain, kind, risk_score, explanation FROM dns_incidents ORDER BY ts DESC LIMIT 50",
+          "format": 1,
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["sentinel-dns", "ovnicom"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "America/Panama",
+  "title": "Sentinel-DNS QoE",
+  "uid": "sentinel-dns-qoe",
+  "version": 1
+}

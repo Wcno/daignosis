@@ -1,0 +1,63 @@
+{
+  "prefixes": [
+    {
+      "prefix": "190.14.0.0/16",
+      "customer": "Hospital Nacional",
+      "site": "Panama-East",
+      "zone": "PA-EAST",
+      "latency_ms": 22,
+      "nxdomain_p": 0.03,
+      "timeout_p": 0.008,
+      "capacity_qps": 400
+    },
+    {
+      "prefix": "190.102.0.0/16",
+      "customer": "Banco Istmo",
+      "site": "Panama-West",
+      "zone": "PA-WEST",
+      "latency_ms": 19,
+      "nxdomain_p": 0.025,
+      "timeout_p": 0.006,
+      "capacity_qps": 350
+    },
+    {
+      "prefix": "200.12.0.0/16",
+      "customer": "Clínica Andes",
+      "site": "Bogota-DC",
+      "zone": "CO-BOG",
+      "latency_ms": 28,
+      "nxdomain_p": 0.04,
+      "timeout_p": 0.01,
+      "capacity_qps": 280
+    },
+    {
+      "prefix": "181.119.0.0/16",
+      "customer": "Banco Agrícola SV",
+      "site": "San-Salvador",
+      "zone": "SV-SS",
+      "latency_ms": 31,
+      "nxdomain_p": 0.035,
+      "timeout_p": 0.012,
+      "capacity_qps": 200
+    },
+    {
+      "prefix": "38.108.0.0/16",
+      "customer": "Hospital GT",
+      "site": "Guatemala-City",
+      "zone": "GT-GUA",
+      "latency_ms": 26,
+      "nxdomain_p": 0.03,
+      "timeout_p": 0.009,
+      "capacity_qps": 220
+    }
+  ],
+  "default": {
+    "customer": "Transit / unknown",
+    "site": "Edge-Other",
+    "zone": "EDGE",
+    "latency_ms": 35,
+    "nxdomain_p": 0.05,
+    "timeout_p": 0.015,
+    "capacity_qps": 150
+  }
+}
